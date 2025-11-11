@@ -5,25 +5,92 @@ on:
     branches: ["master"]
   pull_request:
     branches: ["master"]
+  workflow_dispatch: # 수동 실행 가능
 
 jobs:
-  build:
+  prebuild:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        node: [16, 18, 20, 21, 22, 23]  # v25 제외, 안정 버전만
+        include:
+          - os: ubuntu-22.04
+            node: 20
+            name: linux-x64
+          - os: macos-14  # ARM64
+            node: 20
+            name: darwin-arm64
+          - os: windows-2022
+            node: 20
+            name: win32-x64
+
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+        with:
+          submodules: recursive
+
+      - name: Install Node ${{ matrix.node }} in ${{ runner.os }}
+        uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node }}
+          cache: 'npm'
 
-      - run: npm install --ignore-scripts
-      - run: npm run prebuild
+      - name: Update node-gyp
+        run: npm install --global node-gyp@latest
 
-      - uses: actions/upload-artifact@v3
+      - name: Install Windows packages
+        if: runner.os == 'Windows'
+        run: ./win_install.ps1
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Build prebuild
+        run: npm run prebuild
+
+      # v4: 각 플랫폼마다 고유한 이름 사용
+      - name: Upload prebuild artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: prebuilds
+          name: prebuilds-${{ matrix.name }}
           path: prebuilds/
+          retention-days: 7
+          if-no-files-found: error
+
+  # 모든 prebuild를 하나로 합치는 job
+  merge-prebuilds:
+    needs: prebuild
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      # v4: pattern으로 여러 artifact 다운로드 + merge
+      - name: Download all prebuilds
+        uses: actions/download-artifact@v4
+        with:
+          pattern: prebuilds-*
+          path: prebuilds/
+          merge-multiple: true
+
+      - name: List prebuilds
+        run: ls -R prebuilds/
+
+      # 병합된 prebuilds를 하나의 artifact로 재업로드
+      - name: Upload merged prebuilds
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-prebuilds
+          path: prebuilds/
+          retention-days: 30
+
+      # 선택사항: Git에 자동 커밋
+      - name: Commit prebuilds to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prebuilds/
+          git diff --staged --quiet || git commit -m "Add prebuilds from CI"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
