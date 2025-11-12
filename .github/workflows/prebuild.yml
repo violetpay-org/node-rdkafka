@@ -13,14 +13,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04
-            node: 20
+            node: 23
             name: linux-x64
           - os: macos-14  # ARM64
-            node: 20
+            node: 23
             name: darwin-arm64
-          - os: windows-2022
-            node: 20
-            name: win32-x64
 
     runs-on: ${{ matrix.os }}
 
@@ -37,10 +34,6 @@ jobs:
 
       - name: Update node-gyp
         run: npm install --global node-gyp@latest
-
-      - name: Install Windows packages
-        if: runner.os == 'Windows'
-        run: ./win_install.ps1
 
       - name: Install dependencies
         run: npm install --ignore-scripts
