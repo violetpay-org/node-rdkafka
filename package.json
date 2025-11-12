@@ -18,6 +18,7 @@
   ],
   "files": [
     "lib/",
+    "util/",
     "prebuilds/",
     "binding.gyp",
     "deps/librdkafka.gyp",
