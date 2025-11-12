@@ -47,6 +47,6 @@
     "node-gyp-build": "^4.8.4"
   },
   "engines": {
-    "node": ">=16 25<"
+    "node": ">=16 <25"
   }
 }
